@@ -5,162 +5,85 @@
 
 package DetyraETrete;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
+import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Security;
-import java.util.Arrays;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.KeyAgreement;
+import javax.crypto.Mac;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-public class Client {
-    private static final String SERVER_ADDRESS = "localhost";
-    private static final int SERVER_PORT = 8080;
-    private static KeyPair clientKeyPair;
-
-    public Client() {
+public class CryptoUtils {
+    public CryptoUtils() {
     }
 
-    public static void main(String[] args) throws Exception {
-        clientKeyPair = CryptoUtils.generateKeyPair();
-        Socket serverSocket = new Socket("localhost", 8080);
+    public static KeyPair generateKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("ECDH", "BC");
+        keyPairGenerator.initialize(256);
+        return keyPairGenerator.generateKeyPair();
+    }
 
-        label122: {
-            label121: {
-                try {
-                    BufferedReader in;
-                    label118: {
-                        label126: {
-                            in = new BufferedReader(new InputStreamReader(serverSocket.getInputStream()));
+    public static byte[] generateSharedSecret(PrivateKey privateKey, PublicKey publicKey) throws Exception {
+        KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", "BC");
+        keyAgreement.init(privateKey);
+        keyAgreement.doPhase(publicKey, true);
+        return keyAgreement.generateSecret();
+    }
 
-                            try {
-                                PrintWriter out = new PrintWriter(serverSocket.getOutputStream(), true);
+    public static String signData(PrivateKey privateKey, String data) throws Exception {
+        Signature signature = Signature.getInstance("SHA256withECDSA", "BC");
+        signature.initSign(privateKey);
+        signature.update(data.getBytes());
+        return Base64.getEncoder().encodeToString(signature.sign());
+    }
 
-                                label112: {
-                                    label111: {
-                                        try {
-                                            BufferedReader consoleIn = new BufferedReader(new InputStreamReader(System.in));
+    public static boolean verifySignature(PublicKey publicKey, String data, String signature) throws Exception {
+        Signature sig = Signature.getInstance("SHA256withECDSA", "BC");
+        sig.initVerify(publicKey);
+        sig.update(data.getBytes());
+        return sig.verify(Base64.getDecoder().decode(signature));
+    }
 
-                                            label107: {
-                                                label106: {
-                                                    try {
-                                                        System.out.println("Welcome to Simplified SSH Client.");
-                                                        System.out.println("Attempting to connect to the SSH server...");
-                                                        String serverPubKeyStr = in.readLine();
-                                                        PublicKey serverPublicKey = CryptoUtils.getPublicKeyFromString(serverPubKeyStr);
-                                                        out.println(Base64.getEncoder().encodeToString(clientKeyPair.getPublic().getEncoded()));
-                                                        byte[] sharedSecret = CryptoUtils.generateSharedSecret(clientKeyPair.getPrivate(), serverPublicKey);
-                                                        String signature = in.readLine();
-                                                        boolean isVerified = CryptoUtils.verifySignature(serverPublicKey, "Server Authentication", signature);
-                                                        if (isVerified) {
-                                                            String hmac = in.readLine();
-                                                            String expectedHmac = CryptoUtils.generateHMAC("Server Authentication", sharedSecret);
-                                                            if (!hmac.equals(expectedHmac)) {
-                                                                System.out.println("HMAC verification failed. Exiting...");
-                                                                break label107;
-                                                            }
+    public static String generateHMAC(String data, byte[] key) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256", "BC");
+        SecretKeySpec secretKeySpec = new SecretKeySpec(key, "HmacSHA256");
+        mac.init(secretKeySpec);
+        return Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes()));
+    }
 
-                                                            out.println("Handshake Successful");
-                                                            System.out.println("Handshake successful. Secure channel established. You can now begin your session.");
+    public static PublicKey getPublicKeyFromString(String key) throws Exception {
+        byte[] byteKey = Base64.getDecoder().decode(key);
+        X509EncodedKeySpec X509publicKey = new X509EncodedKeySpec(byteKey);
+        KeyFactory kf = KeyFactory.getInstance("ECDH", "BC");
+        return kf.generatePublic(X509publicKey);
+    }
 
-                                                            while(true) {
-                                                                String userInput;
-                                                                if ((userInput = consoleIn.readLine()) == null) {
-                                                                    break label106;
-                                                                }
+    public static String encrypt(String data, byte[] key) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+        SecretKeySpec secretKeySpec = new SecretKeySpec(key, "AES");
+        IvParameterSpec iv = new IvParameterSpec(new byte[16]);
+        cipher.init(1, secretKeySpec, iv);
+        byte[] encrypted = cipher.doFinal(data.getBytes());
+        return Base64.getEncoder().encodeToString(encrypted);
+    }
 
-                                                                String encryptedUserInput = CryptoUtils.encrypt(userInput, Arrays.copyOf(sharedSecret, 16));
-                                                                out.println(encryptedUserInput);
-                                                                if ("exit".equalsIgnoreCase(userInput)) {
-                                                                    break label106;
-                                                                }
-
-                                                                String encryptedServerResponse = in.readLine();
-                                                                String decryptedServerResponse = CryptoUtils.decrypt(encryptedServerResponse, Arrays.copyOf(sharedSecret, 16));
-                                                                System.out.println("Server: " + decryptedServerResponse);
-                                                            }
-                                                        }
-
-                                                        System.out.println("Server verification failed. Exiting...");
-                                                    } catch (Throwable var20) {
-                                                        try {
-                                                            consoleIn.close();
-                                                        } catch (Throwable var19) {
-                                                            var20.addSuppressed(var19);
-                                                        }
-
-                                                        throw var20;
-                                                    }
-
-                                                    consoleIn.close();
-                                                    break label112;
-                                                }
-
-                                                consoleIn.close();
-                                                break label111;
-                                            }
-
-                                            consoleIn.close();
-                                        } catch (Throwable var21) {
-                                            try {
-                                                out.close();
-                                            } catch (Throwable var18) {
-                                                var21.addSuppressed(var18);
-                                            }
-
-                                            throw var21;
-                                        }
-
-                                        out.close();
-                                        break label118;
-                                    }
-
-                                    out.close();
-                                    break label126;
-                                }
-
-                                out.close();
-                            } catch (Throwable var22) {
-                                try {
-                                    in.close();
-                                } catch (Throwable var17) {
-                                    var22.addSuppressed(var17);
-                                }
-
-                                throw var22;
-                            }
-
-                            in.close();
-                            break label121;
-                        }
-
-                        in.close();
-                        break label122;
-                    }
-
-                    in.close();
-                } catch (Throwable var23) {
-                    try {
-                        serverSocket.close();
-                    } catch (Throwable var16) {
-                        var23.addSuppressed(var16);
-                    }
-
-                    throw var23;
-                }
-
-                serverSocket.close();
-                return;
-            }
-
-            serverSocket.close();
-            return;
-        }
-
-        serverSocket.close();
+    public static String decrypt(String encryptedData, byte[] key) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", "BC");
+        SecretKeySpec secretKeySpec = new SecretKeySpec(key, "AES");
+        IvParameterSpec iv = new IvParameterSpec(new byte[16]);
+        cipher.init(2, secretKeySpec, iv);
+        byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(encryptedData));
+        return new String(decrypted);
     }
 
     static {
