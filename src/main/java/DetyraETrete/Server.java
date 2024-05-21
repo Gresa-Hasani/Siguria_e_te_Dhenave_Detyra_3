@@ -40,11 +40,11 @@ public class Server {
 private static void handleClient(Socket clientSocket) throws Exception {
     BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
     PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-
+    BufferedReader consoleIn = new BufferedReader(new InputStreamReader(System.in));
 
     out.println(Base64.getEncoder().encodeToString(serverKeyPair.getPublic().getEncoded()));
 
-   
+
     String clientPubKeyStr = in.readLine();
     clientPublicKey = CryptoUtils.getPublicKeyFromString(clientPubKeyStr);
 
@@ -61,17 +61,16 @@ private static void handleClient(Socket clientSocket) throws Exception {
         if ("Handshake Successful".equals(confirmation)) {
             System.out.println("Handshake successful. Proceeding to establish secure channel...");
 
-            
+
             String clientMessage;
             while ((clientMessage = in.readLine()) != null) {
-                // Dekripto mesazhin e klientit
                 String decryptedClientMessage = CryptoUtils.decrypt(clientMessage, Arrays.copyOf(sharedSecret, 16));
                 System.out.println("Client: " + decryptedClientMessage);
 
                 System.out.print("");
                 String response = consoleIn.readLine();
 
-                
+
                 String encryptedResponse = CryptoUtils.encrypt(response, Arrays.copyOf(sharedSecret, 16));
                 out.println(encryptedResponse);
             }
@@ -80,4 +79,8 @@ private static void handleClient(Socket clientSocket) throws Exception {
         }
     }
 }
+
+
+
+
 

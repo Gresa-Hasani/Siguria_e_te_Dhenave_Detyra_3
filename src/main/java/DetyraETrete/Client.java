@@ -38,8 +38,8 @@ public class Client {
 
             out.println(Base64.getEncoder().encodeToString(clientKeyPair.getPublic().getEncoded()));
 
-                        byte[] sharedSecret = CryptoUtils.generateSharedSecret(clientKeyPair.getPrivate(), serverPublicKey);
-            
+            byte[] sharedSecret = CryptoUtils.generateSharedSecret(clientKeyPair.getPrivate(), serverPublicKey);
+            String signature = in.readLine();
             boolean isVerified = CryptoUtils.verifySignature(serverPublicKey, "Server Authentication", signature);
             if (!isVerified) {
                 System.out.println("Server verification failed. Exiting...");
