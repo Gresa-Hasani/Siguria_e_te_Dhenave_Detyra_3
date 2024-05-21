@@ -48,7 +48,14 @@ private static void handleClient(Socket clientSocket) throws Exception {
     String clientPubKeyStr = in.readLine();
     clientPublicKey = CryptoUtils.getPublicKeyFromString(clientPubKeyStr);
 
-   
+    byte[] sharedSecret = CryptoUtils.generateSharedSecret(serverKeyPair.getPrivate(), clientPublicKey);
+
+    String message = "Server Authentication";
+    String signature = CryptoUtils.signData(serverKeyPair.getPrivate(), message);
+    out.println(signature);
+
+    String hmac = CryptoUtils.generateHMAC(message, sharedSecret);
+    out.println(hmac);
 
         String confirmation = in.readLine();
         if ("Handshake Successful".equals(confirmation)) {
